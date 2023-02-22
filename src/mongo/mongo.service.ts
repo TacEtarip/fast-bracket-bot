@@ -21,10 +21,11 @@ export class MongoService {
     return this.tournamentModel.create(tournament);
   }
 
-  updateTournamentStateAndAddParticipants(
+  updateTournamentStatAddParticipantsAndBracket(
     tournamentId: string,
     newState: TournamentState,
     participants: string[],
+    bracketId: string,
   ): Promise<TournamentDocument> {
     const participantsToAdd = participants.map((p) => {
       return new Model<Participant>({
@@ -37,6 +38,7 @@ export class MongoService {
         tournamentId,
         {
           state: newState,
+          bracket: bracketId,
           participants: [...participantsToAdd],
         },
         { new: true },
@@ -98,6 +100,7 @@ export class MongoService {
     const firstRound: Round = new Model<Round>({
       roundNumber: 1,
       matchUps,
+      completed: false,
     });
 
     const createdBracket = new this.bracketModel({
@@ -107,5 +110,18 @@ export class MongoService {
     });
 
     return createdBracket.save();
+  }
+
+  getActiveTournamentByUserId(userId: string): Promise<TournamentDocument> {
+    return this.tournamentModel
+      .findOne({
+        userId,
+        state: TournamentState.Started,
+      })
+      .exec();
+  }
+
+  getBracketById(bracketId: string): Promise<BracketDocument> {
+    return this.bracketModel.findById(bracketId).exec();
   }
 }

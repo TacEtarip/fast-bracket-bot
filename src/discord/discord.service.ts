@@ -7,6 +7,7 @@ import { Tournament, TournamentDocument } from './../schemas/tournament.schema';
 enum BotOrder {
   CreateBracket = 'create',
   StartBracket = 'start',
+  SelectMatchUpWinner = 'winner',
 }
 
 @Injectable()
@@ -34,7 +35,7 @@ export class DiscordService implements OnModuleInit {
 
   handleOnMessage = (message: Message) => {
     const messageContent = message.content.toLowerCase();
-    const botOrders = messageContent.split(' ');
+    const botOrders = messageContent.replace(/\s+/g, ' ').trim().split(' ');
     if (botOrders[0] === '!ftb') {
       this.handleOrders(botOrders, message);
     }
@@ -46,6 +47,10 @@ export class DiscordService implements OnModuleInit {
       return;
     }
     if (botOrders[1] === BotOrder.StartBracket) {
+      // this.startBracket(message);
+      return;
+    }
+    if (botOrders[1] === BotOrder.SelectMatchUpWinner) {
       // this.startBracket(message);
       return;
     }
@@ -77,13 +82,28 @@ export class DiscordService implements OnModuleInit {
       return;
     }
 
-    // const bracket = this.createTournamentBracket(participants);
+    const bracket = await this.mongoService.createNewBracket(participants);
 
-    await this.mongoService.updateTournamentStateAndAddParticipants(
+    await this.mongoService.updateTournamentStatAddParticipantsAndBracket(
       tournament.id,
       TournamentState.Started,
       participants,
+      bracket.id,
     );
+
+    await message.reply('Tournament started, this is the bracket:');
+
+    const matches = bracket.rounds[0].matchUps;
+
+    for (let index = 0; index < matches.length; index++) {
+      await message.channel.send(
+        `Match ${index + 1}: ${matches[index].firstParticipant} vs ${
+          matches[index].secondParticipant
+        }. To select the winner, type !ftb winner M${
+          index + 1
+        } <participant order>`,
+      );
+    }
   }
 
   getParticipants(message: string): string[] {
@@ -188,6 +208,41 @@ export class DiscordService implements OnModuleInit {
     }
 
     return currentTournament;
+  }
+
+  async selectWinner(message: Message, messageContent: string) {
+    const matchNumber = messageContent.split(' ')[2];
+
+    if (!matchNumber) {
+      return message.reply('You need to specify the match number');
+    }
+
+    const matchWinner = parseInt(
+      messageContent.split(' ')[3] || 'non number',
+      10,
+    );
+
+    if (!matchWinner || (matchWinner && isNaN(matchWinner))) {
+      return message.reply('You need to specify the match winner');
+    }
+
+    const tournament = await this.mongoService.getActiveTournamentByUserId(
+      message.author.id,
+    );
+
+    if (!tournament) {
+      return message.reply(
+        "You don't have an active tournament. You can create one with !ftb create",
+      );
+    }
+
+    if (tournament.state === TournamentState.Created) {
+      return message.reply(
+        'The tournament has not started yet. You can start it with !ftb start',
+      );
+    }
+
+    const bracket = await this.mongoService.getBracketById(tournament.bracket);
   }
 
   async login(token: string): Promise<void> {

@@ -14,6 +14,13 @@ export class MatchUp {
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Participant' })
   secondParticipant: Participant;
+
+  @Prop({
+    type: Number,
+    default: -1,
+    enum: [-1, 0, 1],
+  })
+  winner?: number;
 }
 
 export const MatchUpSchema = SchemaFactory.createForClass(MatchUp);
